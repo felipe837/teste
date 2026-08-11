@@ -183,6 +183,7 @@
 <div class="app">
   <div class="panel">
     <div class="panel-header" style="position:relative;">
+      <button id="backupQuickBtn" title="Backup dos seus dados" style="position:absolute; top:20px; right:64px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">📦</button>
       <button id="themeToggle" title="Alternar tema" style="position:absolute; top:20px; right:20px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">🌙</button>
       <div class="brand-mark">🚚</div>
       <div class="eyebrow">Roteirizador · Protótipo</div>
@@ -674,6 +675,37 @@ document.getElementById('restaurarBackupInput').addEventListener('change', (e) =
   const file = e.target.files[0];
   if(file) restaurarBackup(file);
   e.target.value = '';
+});
+
+// Ícone rápido de backup, sempre visível no topo — abre um menuzinho com as duas opções,
+// sem precisar procurar dentro de "Configurações avançadas"
+document.getElementById('backupQuickBtn').addEventListener('click', () => {
+  const existente = document.getElementById('backupQuickMenu');
+  if(existente){ existente.remove(); return; }
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="backupQuickMenu" style="position:fixed; top:64px; right:20px; z-index:5000; background:var(--navy-2); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.3); padding:8px; width:180px;">
+      <button id="backupQuickExportBtn" style="width:100%; background:transparent; color:var(--amber); border:none; text-align:left; padding:9px 8px; font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; border-radius:6px;">📤 Fazer backup</button>
+      <button id="backupQuickRestoreBtn" style="width:100%; background:transparent; color:var(--paper); border:none; text-align:left; padding:9px 8px; font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; border-radius:6px;">📥 Restaurar</button>
+    </div>
+  `);
+  document.getElementById('backupQuickExportBtn').addEventListener('click', () => {
+    document.getElementById('backupQuickMenu').remove();
+    exportarBackup();
+  });
+  document.getElementById('backupQuickRestoreBtn').addEventListener('click', () => {
+    document.getElementById('backupQuickMenu').remove();
+    document.getElementById('restaurarBackupInput').click();
+  });
+  // Fecha o menu se clicar fora dele
+  setTimeout(() => {
+    document.addEventListener('click', function fechar(e){
+      const menu = document.getElementById('backupQuickMenu');
+      if(menu && !menu.contains(e.target) && e.target.id !== 'backupQuickBtn'){
+        menu.remove();
+        document.removeEventListener('click', fechar);
+      }
+    });
+  }, 0);
 });
 
 const genBtn = document.getElementById('genBtn');
