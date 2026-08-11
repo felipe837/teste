@@ -2728,17 +2728,23 @@ async function verificarPedagiosNaRota(geometry){
   try{
     const res = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'data=' + encodeURIComponent(query)
     });
-    if(!res.ok) return [];
+    if(!res.ok){
+      console.warn('Overpass API respondeu com erro:', res.status, await res.text().catch(() => ''));
+      return [];
+    }
     const data = await res.json();
     const pedagios = (data.elements || []).map(el => ({ lat: el.lat, lng: el.lon, nome: (el.tags && el.tags.name) ? el.tags.name : 'Pedágio' }));
+    console.log(`Pedágios encontrados na região da rota: ${pedagios.length}`);
     if(!pedagios.length) return [];
 
     // Só considera "no trajeto" o pedágio que fica bem pertinho (~300m) de algum ponto do caminho
     const limiarKm = 0.3;
     return pedagios.filter(pedagio => geometry.some(([lng, lat]) => haversine({ lat, lng }, pedagio) <= limiarKm));
   }catch(e){
+    console.warn('Falha ao consultar pedágios (Overpass API):', e);
     return [];
   }
 }
@@ -4334,8 +4340,19 @@ genBtn.addEventListener('click', async () => {
       if(!pedagios.length) return;
       const el = document.getElementById(`driverPedagio-${dIdx}`);
       if(el){
-        const nomes = [...new Set(pedagios.map(p => p.nome))];
-        el.textContent = `🛣️ Pedágio conhecido no trajeto: ${nomes.join(', ')}`;
+        // Junta pedágios muito próximos uns dos outros (mesma praça, marcados 2x no mapa) num só
+        const unicos = [];
+        pedagios.forEach(p => {
+          const jaTem = unicos.some(u => haversine(u, p) < 0.1);
+          if(!jaTem) unicos.push(p);
+        });
+        const nomeMotorista = drv.driverInfo && drv.driverInfo.name ? ' de ' + drv.driverInfo.name : '';
+        const linksPedagios = unicos.map((p, i) => {
+          const rotulo = (p.nome && p.nome !== 'Pedágio') ? p.nome : `Pedágio ${i + 1}`;
+          const linkMaps = `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+          return `<a href="${linkMaps}" target="_blank" style="color:#5B9BD5; text-decoration:underline;">${rotulo} (ver no mapa)</a>`;
+        }).join(' · ');
+        el.innerHTML = `🛣️ Pedágio conhecido na rota${nomeMotorista}: ${linksPedagios}`;
         el.style.display = 'block';
       }
     }).catch(() => {});
