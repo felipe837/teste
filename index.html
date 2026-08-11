@@ -266,6 +266,14 @@ Rua Tiradentes, 50, Monte Belo, MG</textarea>
           <label style="margin-top:14px;">💰 Custo por km — por motorista (opcional)</label>
           <div id="custoKmSelectors"></div>
           <div class="hint">Deixe em branco pra usar o padrão de cima.</div>
+
+          <label style="margin-top:14px;">📦 Backup dos seus dados</label>
+          <div class="hint" style="margin-bottom:8px;">Clientes, zonas, rotas salvas e recorrentes ficam só neste computador. Faça backup de vez em quando pra não perder nada se limpar o navegador ou trocar de computador.</div>
+          <input type="file" id="restaurarBackupInput" accept=".json" style="display:none;">
+          <div style="display:flex; gap:8px;">
+            <button id="exportarBackupBtn" type="button" style="flex:1; background:var(--navy-2); color:var(--amber); border:1px solid var(--amber); border-radius:8px; padding:9px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;">📤 Fazer backup</button>
+            <button id="restaurarBackupBtn" type="button" style="flex:1; background:var(--navy-2); color:var(--paper); border:1px solid var(--line); border-radius:8px; padding:9px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;">📥 Restaurar</button>
+          </div>
         </div>
       </details>
 
@@ -656,6 +664,16 @@ document.getElementById('planilhaInput').addEventListener('change', (e) => {
     document.getElementById('planilhaInput').value = ''; // permite importar o mesmo arquivo de novo depois
   };
   reader.readAsArrayBuffer(file);
+});
+
+document.getElementById('exportarBackupBtn').addEventListener('click', exportarBackup);
+document.getElementById('restaurarBackupBtn').addEventListener('click', () => {
+  document.getElementById('restaurarBackupInput').click();
+});
+document.getElementById('restaurarBackupInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(file) restaurarBackup(file);
+  e.target.value = '';
 });
 
 const genBtn = document.getElementById('genBtn');
@@ -1553,6 +1571,7 @@ function showRecurringView(){
       selectedDays = new Set();
       draw();
       setStatus(`${enderecos.length} cliente(s) recorrente(s) cadastrados.`, 'ok');
+      registrarAlteracaoImportante();
     });
 
     document.querySelectorAll('.remove-recurring-btn').forEach(btn => {
@@ -1562,6 +1581,7 @@ function showRecurringView(){
         list.splice(idx, 1);
         saveRecurringClients(list);
         draw();
+        registrarAlteracaoImportante();
       });
     });
 
@@ -1663,6 +1683,7 @@ function showZonesView(){
       saveZones(zones2);
       selectedZone = name;
       draw();
+      registrarAlteracaoImportante();
     });
 
     document.querySelectorAll('.zone-select-btn').forEach(btn => {
@@ -1680,6 +1701,7 @@ function showZonesView(){
         saveZones(zones2);
         selectedZone = null;
         draw();
+        registrarAlteracaoImportante();
       });
 
       document.getElementById('addZoneAddrBtn').addEventListener('click', () => {
@@ -1699,6 +1721,7 @@ function showZonesView(){
         saveZones(zones2);
         draw();
         setStatus(`${adicionados} endereço(s) adicionados à zona "${selectedZone}".`, 'ok');
+        registrarAlteracaoImportante();
       });
 
       document.querySelectorAll('.remove-zone-addr-btn').forEach(btn => {
@@ -1708,6 +1731,7 @@ function showZonesView(){
           zones2[selectedZone].splice(idx, 1);
           saveZones(zones2);
           draw();
+          registrarAlteracaoImportante();
         });
       });
 
@@ -1826,6 +1850,7 @@ function showClientesView(){
       saveClientes(lista);
       editandoIdx = null;
       draw();
+      registrarAlteracaoImportante();
     });
 
     const cancelBtn = document.getElementById('cancelarEdicaoBtn');
@@ -1843,6 +1868,7 @@ function showClientesView(){
         lista.splice(idx, 1);
         saveClientes(lista);
         draw();
+        registrarAlteracaoImportante();
       });
     });
 
@@ -1876,6 +1902,104 @@ function getChaveEmpresaAtual(){
     const lic = JSON.parse(localStorage.getItem('roteirizador_licenca') || 'null');
     return lic ? lic.chave : null;
   }catch(e){ return null; }
+}
+
+// Backup: junta tudo que está salvo no navegador (clientes, zonas, rotas salvas, recorrentes, etc.)
+// num arquivo só, pra não perder nada se limpar o navegador ou trocar de computador.
+// Conta mudanças importantes (cliente, zona, rota salva, etc.) desde o último backup,
+// e avisa discretamente quando acumular bastante coisa sem backup feito.
+function registrarAlteracaoImportante(){
+  const chaveAtual = getChaveEmpresaAtual();
+  if(!chaveAtual) return; // só rastreia depois de logado numa empresa
+  let count = 0;
+  try{ count = parseInt(localStorage.getItem(chaveComLicenca('roteirizador_alteracoesDesdeBackup')) || '0'); }catch(e){}
+  count++;
+  try{ localStorage.setItem(chaveComLicenca('roteirizador_alteracoesDesdeBackup'), String(count)); }catch(e){}
+  if(count >= 5) mostrarLembreteBackup();
+}
+
+function mostrarLembreteBackup(){
+  if(document.getElementById('lembreteBackupBanner')) return; // já está mostrando
+  document.body.insertAdjacentHTML('afterbegin', `
+    <div id="lembreteBackupBanner" style="position:fixed; top:0; left:0; right:0; z-index:5500; background:var(--amber); color:var(--ink); text-align:center; padding:10px 16px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;">
+      <span>📦 Você fez várias mudanças — que tal fazer um backup agora, pra não correr risco de perder nada?</span>
+      <button id="lembreteBackupAgoraBtn" style="background:var(--ink); color:var(--amber); border:none; border-radius:6px; padding:5px 12px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit;">Fazer backup agora</button>
+      <button id="lembreteBackupDepoisBtn" style="background:transparent; color:var(--ink); border:1px solid var(--ink); border-radius:6px; padding:5px 12px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit;">Lembrar depois</button>
+    </div>
+  `);
+  document.getElementById('lembreteBackupAgoraBtn').addEventListener('click', () => {
+    document.getElementById('lembreteBackupBanner').remove();
+    exportarBackup();
+  });
+  document.getElementById('lembreteBackupDepoisBtn').addEventListener('click', () => {
+    document.getElementById('lembreteBackupBanner').remove();
+    // Reduz o contador (não zera) pra não insistir de novo na próxima mudança, mas volta a avisar depois de mais um tempinho
+    try{ localStorage.setItem(chaveComLicenca('roteirizador_alteracoesDesdeBackup'), '2'); }catch(e){}
+  });
+}
+
+function exportarBackup(){
+  const chaveAtual = getChaveEmpresaAtual();
+  if(!chaveAtual){ alert('Não consegui identificar sua empresa agora.'); return; }
+  const sufixo = '__' + chaveAtual;
+  const dados = {};
+  for(let i = 0; i < localStorage.length; i++){
+    const key = localStorage.key(i);
+    if(key && key.endsWith(sufixo)){
+      const chaveOriginal = key.slice(0, -sufixo.length);
+      dados[chaveOriginal] = localStorage.getItem(key);
+    }
+  }
+  if(!Object.keys(dados).length){ alert('Não há nada salvo ainda pra fazer backup.'); return; }
+  const backup = { versao: 1, geradoEm: new Date().toISOString(), dados };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `backup_roteirizador_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  // Zera o contador de mudanças (acabou de fazer backup) e conta quantos backups já foram feitos ao todo
+  try{ localStorage.setItem(chaveComLicenca('roteirizador_alteracoesDesdeBackup'), '0'); }catch(e){}
+  let totalBackups = 0;
+  try{ totalBackups = parseInt(localStorage.getItem(chaveComLicenca('roteirizador_totalBackups')) || '0'); }catch(e){}
+  totalBackups++;
+  try{ localStorage.setItem(chaveComLicenca('roteirizador_totalBackups'), String(totalBackups)); }catch(e){}
+
+  setStatus('Backup baixado com sucesso.', 'ok');
+  if(totalBackups > 0 && totalBackups % 3 === 0){
+    setTimeout(() => {
+      alert(`Você já fez ${totalBackups} backups! Vale a pena dar uma olhada na sua pasta de Downloads e apagar os arquivos de backup mais antigos, pra não acumular demais — só o mais recente já serve.`);
+    }, 300);
+  }
+}
+
+function restaurarBackup(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let backup;
+    try{
+      backup = JSON.parse(e.target.result);
+      if(!backup || typeof backup.dados !== 'object') throw new Error('formato inválido');
+    }catch(err){
+      alert('Não consegui ler esse arquivo. Confira se é um backup gerado pelo próprio app.');
+      return;
+    }
+    const chaveAtual = getChaveEmpresaAtual();
+    if(!chaveAtual){ alert('Não consegui identificar sua empresa agora.'); return; }
+    if(!confirm(`Isso vai substituir os dados salvos atualmente (clientes, zonas, rotas salvas, etc.) pelos do backup. Continuar?`)) return;
+    let count = 0;
+    Object.keys(backup.dados).forEach(chaveOriginal => {
+      try{
+        localStorage.setItem(chaveComLicenca(chaveOriginal), backup.dados[chaveOriginal]);
+        count++;
+      }catch(err){}
+    });
+    alert(`Backup restaurado! ${count} item(ns) recuperado(s). A página vai recarregar agora.`);
+    location.reload();
+  };
+  reader.readAsText(file);
 }
 
 async function showFuncionariosView(){
@@ -3855,6 +3979,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', () => {
   refreshTemplateSelect();
   routeTemplateSelect.value = nome;
   setStatus(`Rota "${nome}" salva.`, 'ok');
+  registrarAlteracaoImportante();
 });
 
 document.getElementById('duplicateTemplateBtn').addEventListener('click', () => {
@@ -3869,6 +3994,7 @@ document.getElementById('duplicateTemplateBtn').addEventListener('click', () => 
   refreshTemplateSelect();
   routeTemplateSelect.value = novoNome;
   setStatus(`Rota duplicada como "${novoNome}".`, 'ok');
+  registrarAlteracaoImportante();
 });
 
 document.getElementById('updateTemplateBtn').addEventListener('click', () => {
@@ -3879,6 +4005,7 @@ document.getElementById('updateTemplateBtn').addEventListener('click', () => {
   templates[nome] = { depot: depotAddrEl.value, addrs: addrsEl.value };
   saveTemplates(templates);
   setStatus(`Rota "${nome}" atualizada.`, 'ok');
+  registrarAlteracaoImportante();
 });
 
 document.getElementById('deleteTemplateBtn').addEventListener('click', () => {
@@ -3890,6 +4017,7 @@ document.getElementById('deleteTemplateBtn').addEventListener('click', () => {
   saveTemplates(templates);
   refreshTemplateSelect();
   setStatus(`Rota "${nome}" apagada.`, 'ok');
+  registrarAlteracaoImportante();
 });
 
 routeTemplateSelect.addEventListener('change', () => {
