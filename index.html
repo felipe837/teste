@@ -2696,16 +2696,50 @@ function splitByDriver(depot, stops, numDrivers){
 
 async function getRouteDistance(route){
   const coords = route.map(p => `${p.lng},${p.lat}`).join(';');
-  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`;
+  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
   try{
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
     if(!data.routes || !data.routes.length) return null;
     const legs = (data.routes[0].legs || []).map(l => l.duration / 60); // minutos por trecho
-    return { distanceKm: data.routes[0].distance / 1000, durationMin: data.routes[0].duration / 60, legs };
+    const geometry = data.routes[0].geometry ? data.routes[0].geometry.coordinates : null; // [[lng,lat], ...] o caminho detalhado
+    return { distanceKm: data.routes[0].distance / 1000, durationMin: data.routes[0].duration / 60, legs, geometry };
   }catch(e){
     return null;
+  }
+}
+
+// Verifica se o trajeto passa pertinho de algum pedágio conhecido no OpenStreetMap (gratuito, via Overpass API).
+// A cobertura não é 100% completa pro Brasil inteiro, então isso avisa sobre pedágios conhecidos, não garante que não tenha nenhum.
+async function verificarPedagiosNaRota(geometry){
+  if(!geometry || geometry.length < 2) return [];
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  geometry.forEach(([lng, lat]) => {
+    if(lat < minLat) minLat = lat;
+    if(lat > maxLat) maxLat = lat;
+    if(lng < minLng) minLng = lng;
+    if(lng > maxLng) maxLng = lng;
+  });
+  const margem = 0.02; // ~2km de margem em volta da rota
+  const bbox = `${minLat - margem},${minLng - margem},${maxLat + margem},${maxLng + margem}`;
+  const query = `[out:json][timeout:15];node["barrier"="toll_booth"](${bbox});out body;`;
+
+  try{
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if(!res.ok) return [];
+    const data = await res.json();
+    const pedagios = (data.elements || []).map(el => ({ lat: el.lat, lng: el.lon, nome: (el.tags && el.tags.name) ? el.tags.name : 'Pedágio' }));
+    if(!pedagios.length) return [];
+
+    // Só considera "no trajeto" o pedágio que fica bem pertinho (~300m) de algum ponto do caminho
+    const limiarKm = 0.3;
+    return pedagios.filter(pedagio => geometry.some(([lng, lat]) => haversine({ lat, lng }, pedagio) <= limiarKm));
+  }catch(e){
+    return [];
   }
 }
 
@@ -2998,6 +3032,7 @@ function renderView(filter){
       </div>
       <div id="driverLiveStatus-${dIdx}" style="display:none; font-size:11px; font-weight:700; color:var(--good); background:rgba(76,154,106,.12); border:1px solid var(--good); border-radius:6px; padding:6px 9px; margin-bottom:10px;"></div>
       <div id="driverEtaDinamico-${dIdx}" style="display:none; font-size:11px; font-weight:700; color:var(--amber); background:rgba(232,135,58,.12); border:1px solid var(--amber); border-radius:6px; padding:6px 9px; margin-bottom:10px;"></div>
+      <div id="driverPedagio-${dIdx}" style="display:none; font-size:11px; font-weight:700; color:#5B9BD5; background:rgba(91,155,213,.12); border:1px solid #5B9BD5; border-radius:6px; padding:6px 9px; margin-bottom:10px;"></div>
       ${temAtraso ? '<div style="background:rgba(224,96,96,.15); border:1px solid #E06060; color:#E06060; border-radius:6px; padding:8px 10px; font-size:12px; margin-bottom:10px; font-weight:700;">⚠ Uma ou mais paradas correm risco de atrasar</div>' : ''}
       ${(() => {
         const gruposNaRota = [...new Set(stopsOnly.map(p => p.grupoCarga).filter(Boolean))];
@@ -4272,6 +4307,7 @@ genBtn.addEventListener('click', async () => {
     }
     drivers.push({ route, color, distanceKm, durationMin, custo, arrivals, vehicle: vehicles[dIdx], driverInfo: driversInfo[dIdx],
       pausaInicioMin: driverPausaInicio[dIdx], pausaDuracaoMin: driverPausaDuracao[dIdx], custoPorKm: custoPorKmDoMotorista,
+      geometry: dist ? dist.geometry : null,
       totalWeightKg: route.slice(1).reduce((sum, p) => sum + (p.weightKg || 0), 0),
       totalVolumeM3: route.slice(1).reduce((sum, p) => sum + (p.volumeM3 || 0), 0),
       totalCobranca: route.slice(1).reduce((sum, p) => sum + (p.valorCobranca || 0), 0)
@@ -4290,6 +4326,20 @@ genBtn.addEventListener('click', async () => {
   startWatchingLive(sessionId, driversMetaAdmin);
   startWatchingTrail(sessionId, driversMetaAdmin);
   startWatchingDeliveryStatus(sessionId, numDrivers);
+
+  // Checa em segundo plano se alguma rota passa perto de pedágio conhecido (não trava a tela — atualiza quando terminar)
+  drivers.forEach((drv, dIdx) => {
+    if(!drv.geometry) return;
+    verificarPedagiosNaRota(drv.geometry).then(pedagios => {
+      if(!pedagios.length) return;
+      const el = document.getElementById(`driverPedagio-${dIdx}`);
+      if(el){
+        const nomes = [...new Set(pedagios.map(p => p.nome))];
+        el.textContent = `🛣️ Pedágio conhecido no trajeto: ${nomes.join(', ')}`;
+        el.style.display = 'block';
+      }
+    }).catch(() => {});
+  });
 
   setStatus(`Rotas geradas: ${numDrivers} motoristas, ${stops.length} paradas no total.`, 'ok');
   playDoneSound();
