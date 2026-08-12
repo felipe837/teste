@@ -163,6 +163,26 @@
     .row{ flex-wrap:wrap; }
     input[type=number]{ width:60px; }
   }
+
+  /* ===== Tutorial guiado ===== */
+  #tutorialHighlight{
+    position:fixed; z-index:7000; border-radius:10px; border:2px solid var(--amber);
+    box-shadow:0 0 0 9999px rgba(0,0,0,.78); pointer-events:none;
+    transition:top .3s ease, left .3s ease, width .3s ease, height .3s ease;
+  }
+  #tutorialCard{
+    position:fixed; z-index:7001; background:var(--navy-2); border:1px solid var(--line); border-radius:14px;
+    padding:20px; width:290px; max-width:88vw; box-shadow:0 20px 50px rgba(0,0,0,.5);
+    transition:top .3s ease, left .3s ease;
+  }
+  #tutorialCard h3{ font-size:14.5px; color:var(--amber); margin-bottom:8px; }
+  #tutorialCard p{ font-size:13px; color:var(--paper); line-height:1.55; margin-bottom:16px; }
+  .tutorial-footer{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .tutorial-progress{ font-size:10.5px; color:var(--muted); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .tutorial-buttons{ display:flex; gap:8px; }
+  .tutorial-btn{ border-radius:7px; padding:7px 13px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; border:none; }
+  .tutorial-btn.proximo{ background:var(--amber); color:var(--navy); }
+  .tutorial-btn.pular{ background:transparent; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -183,6 +203,7 @@
 <div class="app">
   <div class="panel">
     <div class="panel-header" style="position:relative;">
+      <button id="tutorialQuickBtn" title="Ver tutorial" style="position:absolute; top:20px; right:108px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">❓</button>
       <button id="backupQuickBtn" title="Backup dos seus dados" style="position:absolute; top:20px; right:64px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">📦</button>
       <button id="themeToggle" title="Alternar tema" style="position:absolute; top:20px; right:20px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">🌙</button>
       <div class="brand-mark">🚚</div>
@@ -257,7 +278,7 @@ Rua Tiradentes, 50, Monte Belo, MG</textarea>
 
       <div id="vehicleSelectors" style="margin-top:14px;"></div>
 
-      <details class="collapsible">
+      <details class="collapsible" id="advancedConfigDetails">
         <summary>🔧 Configurações avançadas</summary>
         <div class="collapsible-body">
           <label for="apiKey">Chave da OpenCage própria (opcional)</label>
@@ -716,6 +737,117 @@ document.getElementById('backupQuickBtn').addEventListener('click', () => {
   }, 0);
 });
 
+// ===== Tutorial guiado =====
+const TUTORIAL_STEPS = [
+  { titulo: 'Bem-vindo! 👋', texto: 'Vamos te mostrar rapidinho como usar o Roteirizador — leva menos de 1 minuto. Você pode pular a qualquer momento.', selector: null },
+  { titulo: '📍 Depósito principal', texto: 'Aqui você coloca o endereço de onde as entregas saem — geralmente sua distribuidora.', selector: '#depotAddr' },
+  { titulo: '📦 Endereços do dia', texto: 'Cole aqui os endereços das entregas, um por linha. Pode ser endereço completo ou só o nome do lugar + cidade.', selector: '#addrs' },
+  { titulo: '🚀 Gerar rota', texto: 'Clica aqui e o app divide tudo sozinho entre os motoristas, na ordem mais eficiente — por peso ou por proximidade.', selector: '#genBtn' },
+  { titulo: '🛠️ Ferramentas', texto: 'Aqui você gerencia clientes, zonas, funcionários, dashboard e mais — tudo organizado por categoria.', selector: '#dashboardBtn' },
+  { titulo: '📦 Backup', texto: 'Clica aqui de vez em quando pra guardar uma cópia de segurança dos seus dados — clientes, zonas, rotas salvas.', selector: '#backupQuickBtn' },
+  { titulo: '🔧 Configurações avançadas', texto: 'Aqui ficam ajustes extras, como chave de mapa própria e custo por km de cada motorista.', selector: '#advancedConfigDetails', abrirDetails: true },
+  { titulo: 'Pronto! 🎉', texto: 'Isso já é o essencial pra começar. Qualquer dúvida, o botão ❓ no topo reabre esse tutorial quando você quiser.', selector: null },
+];
+let tutorialPasso = 0;
+
+function posicionarTutorial(){
+  const step = TUTORIAL_STEPS[tutorialPasso];
+  const highlight = document.getElementById('tutorialHighlight');
+  const card = document.getElementById('tutorialCard');
+  if(!highlight || !card) return;
+
+  let rect;
+  if(step.selector){
+    const alvo = document.querySelector(step.selector);
+    if(alvo){
+      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      rect = alvo.getBoundingClientRect();
+    }
+  }
+  if(!rect){
+    // Passo sem alvo específico (boas-vindas / final): destaque "invisível" no centro da tela
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    rect = { top: cy, left: cx, right: cx, bottom: cy, width: 0, height: 0 };
+    highlight.style.borderColor = 'transparent';
+  }else{
+    highlight.style.borderColor = 'var(--amber)';
+  }
+
+  const folga = 6;
+  highlight.style.top = (rect.top - folga) + 'px';
+  highlight.style.left = (rect.left - folga) + 'px';
+  highlight.style.width = (rect.width + folga * 2) + 'px';
+  highlight.style.height = (rect.height + folga * 2) + 'px';
+
+  // Posiciona o cartão embaixo do alvo, ou em cima se não tiver espaço embaixo
+  const alturaCard = 170;
+  let cardTop = rect.bottom + 16;
+  if(cardTop + alturaCard > window.innerHeight) cardTop = Math.max(16, rect.top - alturaCard - 16);
+  cardTop = Math.max(16, Math.min(cardTop, window.innerHeight - alturaCard - 16));
+  let cardLeft = rect.left + rect.width / 2 - 145;
+  cardLeft = Math.max(12, Math.min(cardLeft, window.innerWidth - 302));
+  card.style.top = cardTop + 'px';
+  card.style.left = cardLeft + 'px';
+
+  card.innerHTML = `
+    <h3>${step.titulo}</h3>
+    <p>${step.texto}</p>
+    <div class="tutorial-footer">
+      <span class="tutorial-progress">${tutorialPasso + 1} / ${TUTORIAL_STEPS.length}</span>
+      <div class="tutorial-buttons">
+        ${tutorialPasso < TUTORIAL_STEPS.length - 1 ? '<button class="tutorial-btn pular" id="tutorialPularBtn">Pular</button>' : ''}
+        <button class="tutorial-btn proximo" id="tutorialProximoBtn">${tutorialPasso < TUTORIAL_STEPS.length - 1 ? 'Próximo' : 'Concluir'}</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('tutorialProximoBtn').addEventListener('click', avancarTutorial);
+  const pularBtn = document.getElementById('tutorialPularBtn');
+  if(pularBtn) pularBtn.addEventListener('click', encerrarTutorial);
+}
+
+function avancarTutorial(){
+  tutorialPasso++;
+  if(tutorialPasso >= TUTORIAL_STEPS.length){ encerrarTutorial(); return; }
+  const step = TUTORIAL_STEPS[tutorialPasso];
+  if(step.abrirDetails && step.selector){
+    const el = document.querySelector(step.selector);
+    if(el && el.tagName === 'DETAILS') el.open = true;
+  }
+  setTimeout(posicionarTutorial, 400); // espera a rolagem suave até o elemento terminar antes de medir a posição
+}
+
+function encerrarTutorial(){
+  const highlight = document.getElementById('tutorialHighlight');
+  const card = document.getElementById('tutorialCard');
+  if(highlight) highlight.remove();
+  if(card) card.remove();
+  window.removeEventListener('resize', posicionarTutorial);
+  const chaveAtual = getChaveEmpresaAtual();
+  if(chaveAtual){
+    try{ localStorage.setItem(chaveComLicenca('roteirizador_tutorialConcluido'), '1'); }catch(e){}
+  }
+}
+
+function iniciarTutorial(){
+  if(document.getElementById('tutorialHighlight')) return; // já está rodando
+  tutorialPasso = 0;
+  document.body.insertAdjacentHTML('beforeend', '<div id="tutorialHighlight"></div><div id="tutorialCard"></div>');
+  posicionarTutorial();
+  window.addEventListener('resize', posicionarTutorial);
+}
+
+// Chamado logo depois de um login bem-sucedido de verdade — só mostra o tutorial sozinho
+// se essa licença nunca tiver visto (ou concluído) ele antes.
+function mostrarTutorialSePrimeiraVez(){
+  const chaveAtual = getChaveEmpresaAtual();
+  if(!chaveAtual) return;
+  let jaViu = false;
+  try{ jaViu = localStorage.getItem(chaveComLicenca('roteirizador_tutorialConcluido')) === '1'; }catch(e){}
+  if(!jaViu) setTimeout(iniciarTutorial, 500);
+}
+
+document.getElementById('tutorialQuickBtn').addEventListener('click', iniciarTutorial);
+
 const genBtn = document.getElementById('genBtn');
 
 if(!mapaDisponivel){
@@ -786,6 +918,31 @@ async function resolverLinkCurto(codigo){
     return snap.val();
   }catch(e){
     return null;
+  }
+}
+
+// Registra (de forma leve) de onde uma chave foi acessada — cidade/estado aproximados via IP,
+// não é GPS exato. Serve pra você perceber se uma chave está sendo usada em lugares muito
+// diferentes ao mesmo tempo, sinal de compartilhamento indevido entre empresas diferentes.
+async function registrarAcesso(chave){
+  const db = getFirebaseDb();
+  if(!db) return;
+  try{
+    const res = await fetch('https://ipapi.co/json/');
+    if(!res.ok) return;
+    const dados = await res.json();
+    const local = [dados.city, dados.region].filter(Boolean).join(', ') || 'Local desconhecido';
+    await db.ref(`licencas/${chave}/acessos/${Date.now()}`).set({ local, data: new Date().toISOString() });
+    // Mantém só os 15 acessos mais recentes, pra não crescer pra sempre
+    const snap = await db.ref(`licencas/${chave}/acessos`).once('value');
+    const acessos = snap.val() || {};
+    const chaves = Object.keys(acessos).sort();
+    if(chaves.length > 15){
+      const remover = chaves.slice(0, chaves.length - 15);
+      remover.forEach(k => db.ref(`licencas/${chave}/acessos/${k}`).set(null));
+    }
+  }catch(e){
+    // Sem internet ou serviço de localização fora do ar — não trava o login por causa disso
   }
 }
 
@@ -948,7 +1105,9 @@ async function checkLoginGate(){
     }
 
     try{ localStorage.setItem('roteirizador_licenca', JSON.stringify({ chave: chaveParaTestar, empresa: resultado.empresa })); }catch(e){}
+    registrarAcesso(chaveParaTestar);
     gate.style.display = 'none';
+    mostrarTutorialSePrimeiraVez();
   };
 
   function mostrarFormFuncionario(chave, funcionarios, empresa){
@@ -981,7 +1140,9 @@ async function checkLoginGate(){
       try{
         localStorage.setItem('roteirizador_licenca', JSON.stringify({ chave, empresa, funcionarioUsuario: usuario, funcionarioNome: funcionario.nome }));
       }catch(e){}
+      registrarAcesso(chave);
       document.getElementById('loginGate').style.display = 'none';
+      mostrarTutorialSePrimeiraVez();
     };
     funcBtn.addEventListener('click', tentarFuncionario);
     senhaInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') tentarFuncionario(); });
@@ -1117,13 +1278,29 @@ function showLicenseManager(){
         const cores = { ativa: 'var(--good)', vencendo: 'var(--amber)', vencida: '#E06060', desativada: 'var(--muted)' };
         const textos = { ativa: 'Ativa', vencendo: '⚠ Vencendo em breve', vencida: 'Vencida', desativada: 'Desativada' };
         const cor = cores[categoria];
+
+        const funcionariosCount = Object.keys(lic.funcionarios || {}).length;
+        const acessosObj = lic.acessos || {};
+        const acessosOrdenados = Object.keys(acessosObj).sort((a, b) => b - a).slice(0, 5).map(k => acessosObj[k]);
+        const locaisDistintos = [...new Set(acessosOrdenados.map(a => a.local).filter(Boolean))];
+        const possivelCompartilhamento = locaisDistintos.length >= 2;
+
+        const acessosHtml = acessosOrdenados.length
+          ? `<div style="font-size:10.5px; color:${possivelCompartilhamento ? '#E06060' : 'var(--muted)'}; margin-top:5px;">
+               ${possivelCompartilhamento ? '⚠️ ' : '📍 '}Últimos acessos: ${acessosOrdenados.map(a => `${a.local} (${new Date(a.data).toLocaleDateString('pt-BR')})`).join(', ')}
+             </div>`
+          : '';
+
         return `
           <div style="background:var(--ink); border-radius:10px; padding:12px; margin-bottom:8px; border-left:3px solid ${cor};">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-              <div>
+              <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:13.5px;">${lic.empresa || '(sem nome)'}</div>
                 <div style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; margin-top:2px;">${chave}</div>
                 <div style="font-size:11px; margin-top:4px; color:${cor}; font-weight:700;">${textos[categoria]}${lic.validoAte ? ' · válida até ' + lic.validoAte : ''}</div>
+                <div style="font-size:10.5px; color:var(--muted); margin-top:5px;">👥 ${funcionariosCount} funcionário${funcionariosCount === 1 ? '' : 's'} cadastrado${funcionariosCount === 1 ? '' : 's'}</div>
+                ${acessosHtml}
+                ${possivelCompartilhamento ? '<div style="font-size:10.5px; color:#E06060; font-weight:700; margin-top:3px;">⚠️ Acessos de locais diferentes — pode ser uso compartilhado entre empresas</div>' : ''}
               </div>
               <div style="display:flex; flex-direction:column; gap:4px;">
                 <button class="copiar-lic-btn" data-chave="${chave}" style="background:transparent; border:1px solid var(--line); color:var(--paper); border-radius:5px; padding:4px 8px; font-size:10px; cursor:pointer; font-family:inherit;">📋 Copiar</button>
@@ -2501,8 +2678,14 @@ function renderVehicleSelectors(){
       pausaDuracaoInput.value = prev.pausaDuracao || '';
       custoKmInput.value = prevCustoKm[i] || '';
     }else{
-      select.value = 5; // Fiat Ducato Cargo como padrão
-      applyModel(5);
+      if(savedDrivers[i] && savedDrivers[i].modelIdx !== undefined && savedDrivers[i].modelIdx !== ''){
+        select.value = savedDrivers[i].modelIdx;
+        kgInput.value = savedDrivers[i].kg || '';
+        m3Input.value = savedDrivers[i].m3 || '';
+      }else{
+        select.value = 5; // Fiat Ducato Cargo como padrão (nenhum veículo salvo ainda)
+        applyModel(5);
+      }
       if(savedDrivers[i]){
         nameInput.value = savedDrivers[i].name || '';
         phoneInput.value = savedDrivers[i].phone || '';
@@ -2518,6 +2701,9 @@ function renderVehicleSelectors(){
       const rows = [...container.querySelectorAll('.vehicle-row')];
       const custoInputs = [...custoKmContainer.querySelectorAll('.driver-custo-km')];
       const info = rows.map((r, idx) => ({
+        modelIdx: r.querySelector('.vehicle-model').value,
+        kg: r.querySelector('.vehicle-kg').value,
+        m3: r.querySelector('.vehicle-m3').value,
         name: r.querySelector('.driver-name').value,
         phone: r.querySelector('.driver-phone').value,
         depotIdx: r.querySelector('.driver-depot').value,
@@ -2528,6 +2714,9 @@ function renderVehicleSelectors(){
       }));
       try{ localStorage.setItem(chaveComLicenca('roteirizador_driversInfo'), JSON.stringify(info)); }catch(e){}
     };
+    select.addEventListener('change', saveDriversInfo);
+    kgInput.addEventListener('change', saveDriversInfo);
+    m3Input.addEventListener('change', saveDriversInfo);
     nameInput.addEventListener('change', saveDriversInfo);
     phoneInput.addEventListener('change', saveDriversInfo);
     pausaInicioInput.addEventListener('change', saveDriversInfo);
