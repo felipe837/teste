@@ -1157,6 +1157,7 @@ async function checkLoginGate(){
     const resultado = await validarLicenca(salva.chave);
     if(resultado.valido){
       gate.style.display = 'none';
+      mostrarTutorialSePrimeiraVez();
       return;
     }
     try{ localStorage.removeItem('roteirizador_licenca'); }catch(e){}
