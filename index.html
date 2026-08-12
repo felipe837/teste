@@ -163,6 +163,26 @@
     .row{ flex-wrap:wrap; }
     input[type=number]{ width:60px; }
   }
+
+  /* ===== Tutorial guiado ===== */
+  #tutorialHighlight{
+    position:fixed; z-index:7000; border-radius:10px; border:2px solid var(--amber);
+    box-shadow:0 0 0 9999px rgba(0,0,0,.78); pointer-events:none;
+    transition:top .3s ease, left .3s ease, width .3s ease, height .3s ease;
+  }
+  #tutorialCard{
+    position:fixed; z-index:7001; background:var(--navy-2); border:1px solid var(--line); border-radius:14px;
+    padding:20px; width:290px; max-width:88vw; box-shadow:0 20px 50px rgba(0,0,0,.5);
+    transition:top .3s ease, left .3s ease;
+  }
+  #tutorialCard h3{ font-size:14.5px; color:var(--amber); margin-bottom:8px; }
+  #tutorialCard p{ font-size:13px; color:var(--paper); line-height:1.55; margin-bottom:16px; }
+  .tutorial-footer{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .tutorial-progress{ font-size:10.5px; color:var(--muted); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .tutorial-buttons{ display:flex; gap:8px; }
+  .tutorial-btn{ border-radius:7px; padding:7px 13px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; border:none; }
+  .tutorial-btn.proximo{ background:var(--amber); color:var(--navy); }
+  .tutorial-btn.pular{ background:transparent; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -183,6 +203,7 @@
 <div class="app">
   <div class="panel">
     <div class="panel-header" style="position:relative;">
+      <button id="tutorialQuickBtn" title="Ver tutorial" style="position:absolute; top:20px; right:108px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">❓</button>
       <button id="backupQuickBtn" title="Backup dos seus dados" style="position:absolute; top:20px; right:64px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">📦</button>
       <button id="themeToggle" title="Alternar tema" style="position:absolute; top:20px; right:20px; background:var(--ink); border:1px solid var(--line); color:var(--paper); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">🌙</button>
       <div class="brand-mark">🚚</div>
@@ -237,7 +258,13 @@ Rua Tiradentes, 50, Monte Belo, MG</textarea>
       <div class="hint">Dica: pode ser <b>endereço completo</b> ou só <b>nome da loja + cidade</b>. <b>Um endereço por linha.</b> Separe por <b>vírgula</b> pra adicionar: horário limite (12:00), peso (50kg), volume (0.3m3), prioridade (vip), coleta (coleta), valor a cobrar (R$50), grupo de carga (grupo:quimico) e observação (obs: texto livre, no fim). Ex: <span style="font-family:'JetBrains Mono','Courier New',monospace;">Rua X, 123, Cidade, MG, 12:00, 50kg, grupo:alimento</span></div>
 
       <input type="file" id="planilhaInput" accept=".csv,.xlsx,.xls" style="display:none;">
-      <button id="importarPlanilhaBtn" type="button" style="width:100%; margin-top:8px; background:transparent; color:var(--paper); border:1px dashed var(--line); border-radius:8px; padding:9px; font-size:12px; cursor:pointer; font-family:inherit;">📥 Importar de planilha (Excel/CSV)</button>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button id="importarPlanilhaBtn" type="button" style="flex:1; background:transparent; color:var(--paper); border:1px dashed var(--line); border-radius:8px; padding:9px; font-size:12px; cursor:pointer; font-family:inherit;">📥 Importar planilha</button>
+        <button id="sugestoesBtn" type="button" style="flex:1; position:relative; background:transparent; color:var(--amber); border:1px dashed var(--amber); border-radius:8px; padding:9px; font-size:12px; cursor:pointer; font-family:inherit;">
+          💡 Sugestões
+          <span id="sugestoesBadge" style="display:none; position:absolute; top:-7px; right:-7px; background:#E06060; color:#fff; width:19px; height:19px; border-radius:50%; font-size:10.5px; font-weight:700; align-items:center; justify-content:center;"></span>
+        </button>
+      </div>
 
       <div class="row">
         <label for="horaSaida">Saída às</label>
@@ -251,7 +278,7 @@ Rua Tiradentes, 50, Monte Belo, MG</textarea>
 
       <div id="vehicleSelectors" style="margin-top:14px;"></div>
 
-      <details class="collapsible">
+      <details class="collapsible" id="advancedConfigDetails">
         <summary>🔧 Configurações avançadas</summary>
         <div class="collapsible-body">
           <label for="apiKey">Chave da OpenCage própria (opcional)</label>
@@ -667,6 +694,8 @@ document.getElementById('planilhaInput').addEventListener('change', (e) => {
   reader.readAsArrayBuffer(file);
 });
 
+document.getElementById('sugestoesBtn').addEventListener('click', showSugestoesView);
+
 document.getElementById('exportarBackupBtn').addEventListener('click', exportarBackup);
 document.getElementById('restaurarBackupBtn').addEventListener('click', () => {
   document.getElementById('restaurarBackupInput').click();
@@ -707,6 +736,117 @@ document.getElementById('backupQuickBtn').addEventListener('click', () => {
     });
   }, 0);
 });
+
+// ===== Tutorial guiado =====
+const TUTORIAL_STEPS = [
+  { titulo: 'Bem-vindo! 👋', texto: 'Vamos te mostrar rapidinho como usar o Roteirizador — leva menos de 1 minuto. Você pode pular a qualquer momento.', selector: null },
+  { titulo: '📍 Depósito principal', texto: 'Aqui você coloca o endereço de onde as entregas saem — geralmente sua distribuidora.', selector: '#depotAddr' },
+  { titulo: '📦 Endereços do dia', texto: 'Cole aqui os endereços das entregas, um por linha. Pode ser endereço completo ou só o nome do lugar + cidade.', selector: '#addrs' },
+  { titulo: '🚀 Gerar rota', texto: 'Clica aqui e o app divide tudo sozinho entre os motoristas, na ordem mais eficiente — por peso ou por proximidade.', selector: '#genBtn' },
+  { titulo: '🛠️ Ferramentas', texto: 'Aqui você gerencia clientes, zonas, funcionários, dashboard e mais — tudo organizado por categoria.', selector: '#dashboardBtn' },
+  { titulo: '📦 Backup', texto: 'Clica aqui de vez em quando pra guardar uma cópia de segurança dos seus dados — clientes, zonas, rotas salvas.', selector: '#backupQuickBtn' },
+  { titulo: '🔧 Configurações avançadas', texto: 'Aqui ficam ajustes extras, como chave de mapa própria e custo por km de cada motorista.', selector: '#advancedConfigDetails', abrirDetails: true },
+  { titulo: 'Pronto! 🎉', texto: 'Isso já é o essencial pra começar. Qualquer dúvida, o botão ❓ no topo reabre esse tutorial quando você quiser.', selector: null },
+];
+let tutorialPasso = 0;
+
+function posicionarTutorial(){
+  const step = TUTORIAL_STEPS[tutorialPasso];
+  const highlight = document.getElementById('tutorialHighlight');
+  const card = document.getElementById('tutorialCard');
+  if(!highlight || !card) return;
+
+  let rect;
+  if(step.selector){
+    const alvo = document.querySelector(step.selector);
+    if(alvo){
+      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      rect = alvo.getBoundingClientRect();
+    }
+  }
+  if(!rect){
+    // Passo sem alvo específico (boas-vindas / final): destaque "invisível" no centro da tela
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    rect = { top: cy, left: cx, right: cx, bottom: cy, width: 0, height: 0 };
+    highlight.style.borderColor = 'transparent';
+  }else{
+    highlight.style.borderColor = 'var(--amber)';
+  }
+
+  const folga = 6;
+  highlight.style.top = (rect.top - folga) + 'px';
+  highlight.style.left = (rect.left - folga) + 'px';
+  highlight.style.width = (rect.width + folga * 2) + 'px';
+  highlight.style.height = (rect.height + folga * 2) + 'px';
+
+  // Posiciona o cartão embaixo do alvo, ou em cima se não tiver espaço embaixo
+  const alturaCard = 170;
+  let cardTop = rect.bottom + 16;
+  if(cardTop + alturaCard > window.innerHeight) cardTop = Math.max(16, rect.top - alturaCard - 16);
+  cardTop = Math.max(16, Math.min(cardTop, window.innerHeight - alturaCard - 16));
+  let cardLeft = rect.left + rect.width / 2 - 145;
+  cardLeft = Math.max(12, Math.min(cardLeft, window.innerWidth - 302));
+  card.style.top = cardTop + 'px';
+  card.style.left = cardLeft + 'px';
+
+  card.innerHTML = `
+    <h3>${step.titulo}</h3>
+    <p>${step.texto}</p>
+    <div class="tutorial-footer">
+      <span class="tutorial-progress">${tutorialPasso + 1} / ${TUTORIAL_STEPS.length}</span>
+      <div class="tutorial-buttons">
+        ${tutorialPasso < TUTORIAL_STEPS.length - 1 ? '<button class="tutorial-btn pular" id="tutorialPularBtn">Pular</button>' : ''}
+        <button class="tutorial-btn proximo" id="tutorialProximoBtn">${tutorialPasso < TUTORIAL_STEPS.length - 1 ? 'Próximo' : 'Concluir'}</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('tutorialProximoBtn').addEventListener('click', avancarTutorial);
+  const pularBtn = document.getElementById('tutorialPularBtn');
+  if(pularBtn) pularBtn.addEventListener('click', encerrarTutorial);
+}
+
+function avancarTutorial(){
+  tutorialPasso++;
+  if(tutorialPasso >= TUTORIAL_STEPS.length){ encerrarTutorial(); return; }
+  const step = TUTORIAL_STEPS[tutorialPasso];
+  if(step.abrirDetails && step.selector){
+    const el = document.querySelector(step.selector);
+    if(el && el.tagName === 'DETAILS') el.open = true;
+  }
+  setTimeout(posicionarTutorial, 400); // espera a rolagem suave até o elemento terminar antes de medir a posição
+}
+
+function encerrarTutorial(){
+  const highlight = document.getElementById('tutorialHighlight');
+  const card = document.getElementById('tutorialCard');
+  if(highlight) highlight.remove();
+  if(card) card.remove();
+  window.removeEventListener('resize', posicionarTutorial);
+  const chaveAtual = getChaveEmpresaAtual();
+  if(chaveAtual){
+    try{ localStorage.setItem(chaveComLicenca('roteirizador_tutorialConcluido'), '1'); }catch(e){}
+  }
+}
+
+function iniciarTutorial(){
+  if(document.getElementById('tutorialHighlight')) return; // já está rodando
+  tutorialPasso = 0;
+  document.body.insertAdjacentHTML('beforeend', '<div id="tutorialHighlight"></div><div id="tutorialCard"></div>');
+  posicionarTutorial();
+  window.addEventListener('resize', posicionarTutorial);
+}
+
+// Chamado logo depois de um login bem-sucedido de verdade — só mostra o tutorial sozinho
+// se essa licença nunca tiver visto (ou concluído) ele antes.
+function mostrarTutorialSePrimeiraVez(){
+  const chaveAtual = getChaveEmpresaAtual();
+  if(!chaveAtual) return;
+  let jaViu = false;
+  try{ jaViu = localStorage.getItem(chaveComLicenca('roteirizador_tutorialConcluido')) === '1'; }catch(e){}
+  if(!jaViu) setTimeout(iniciarTutorial, 500);
+}
+
+document.getElementById('tutorialQuickBtn').addEventListener('click', iniciarTutorial);
 
 const genBtn = document.getElementById('genBtn');
 
@@ -778,6 +918,31 @@ async function resolverLinkCurto(codigo){
     return snap.val();
   }catch(e){
     return null;
+  }
+}
+
+// Registra (de forma leve) de onde uma chave foi acessada — cidade/estado aproximados via IP,
+// não é GPS exato. Serve pra você perceber se uma chave está sendo usada em lugares muito
+// diferentes ao mesmo tempo, sinal de compartilhamento indevido entre empresas diferentes.
+async function registrarAcesso(chave){
+  const db = getFirebaseDb();
+  if(!db) return;
+  try{
+    const res = await fetch('https://ipapi.co/json/');
+    if(!res.ok) return;
+    const dados = await res.json();
+    const local = [dados.city, dados.region].filter(Boolean).join(', ') || 'Local desconhecido';
+    await db.ref(`licencas/${chave}/acessos/${Date.now()}`).set({ local, data: new Date().toISOString() });
+    // Mantém só os 15 acessos mais recentes, pra não crescer pra sempre
+    const snap = await db.ref(`licencas/${chave}/acessos`).once('value');
+    const acessos = snap.val() || {};
+    const chaves = Object.keys(acessos).sort();
+    if(chaves.length > 15){
+      const remover = chaves.slice(0, chaves.length - 15);
+      remover.forEach(k => db.ref(`licencas/${chave}/acessos/${k}`).set(null));
+    }
+  }catch(e){
+    // Sem internet ou serviço de localização fora do ar — não trava o login por causa disso
   }
 }
 
@@ -940,7 +1105,9 @@ async function checkLoginGate(){
     }
 
     try{ localStorage.setItem('roteirizador_licenca', JSON.stringify({ chave: chaveParaTestar, empresa: resultado.empresa })); }catch(e){}
+    registrarAcesso(chaveParaTestar);
     gate.style.display = 'none';
+    mostrarTutorialSePrimeiraVez();
   };
 
   function mostrarFormFuncionario(chave, funcionarios, empresa){
@@ -973,7 +1140,9 @@ async function checkLoginGate(){
       try{
         localStorage.setItem('roteirizador_licenca', JSON.stringify({ chave, empresa, funcionarioUsuario: usuario, funcionarioNome: funcionario.nome }));
       }catch(e){}
+      registrarAcesso(chave);
       document.getElementById('loginGate').style.display = 'none';
+      mostrarTutorialSePrimeiraVez();
     };
     funcBtn.addEventListener('click', tentarFuncionario);
     senhaInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') tentarFuncionario(); });
@@ -988,6 +1157,7 @@ async function checkLoginGate(){
     const resultado = await validarLicenca(salva.chave);
     if(resultado.valido){
       gate.style.display = 'none';
+      mostrarTutorialSePrimeiraVez();
       return;
     }
     try{ localStorage.removeItem('roteirizador_licenca'); }catch(e){}
@@ -1109,13 +1279,29 @@ function showLicenseManager(){
         const cores = { ativa: 'var(--good)', vencendo: 'var(--amber)', vencida: '#E06060', desativada: 'var(--muted)' };
         const textos = { ativa: 'Ativa', vencendo: '⚠ Vencendo em breve', vencida: 'Vencida', desativada: 'Desativada' };
         const cor = cores[categoria];
+
+        const funcionariosCount = Object.keys(lic.funcionarios || {}).length;
+        const acessosObj = lic.acessos || {};
+        const acessosOrdenados = Object.keys(acessosObj).sort((a, b) => b - a).slice(0, 5).map(k => acessosObj[k]);
+        const locaisDistintos = [...new Set(acessosOrdenados.map(a => a.local).filter(Boolean))];
+        const possivelCompartilhamento = locaisDistintos.length >= 2;
+
+        const acessosHtml = acessosOrdenados.length
+          ? `<div style="font-size:10.5px; color:${possivelCompartilhamento ? '#E06060' : 'var(--muted)'}; margin-top:5px;">
+               ${possivelCompartilhamento ? '⚠️ ' : '📍 '}Últimos acessos: ${acessosOrdenados.map(a => `${a.local} (${new Date(a.data).toLocaleDateString('pt-BR')})`).join(', ')}
+             </div>`
+          : '';
+
         return `
           <div style="background:var(--ink); border-radius:10px; padding:12px; margin-bottom:8px; border-left:3px solid ${cor};">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-              <div>
+              <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:13.5px;">${lic.empresa || '(sem nome)'}</div>
                 <div style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; margin-top:2px;">${chave}</div>
                 <div style="font-size:11px; margin-top:4px; color:${cor}; font-weight:700;">${textos[categoria]}${lic.validoAte ? ' · válida até ' + lic.validoAte : ''}</div>
+                <div style="font-size:10.5px; color:var(--muted); margin-top:5px;">👥 ${funcionariosCount} funcionário${funcionariosCount === 1 ? '' : 's'} cadastrado${funcionariosCount === 1 ? '' : 's'}</div>
+                ${acessosHtml}
+                ${possivelCompartilhamento ? '<div style="font-size:10.5px; color:#E06060; font-weight:700; margin-top:3px;">⚠️ Acessos de locais diferentes — pode ser uso compartilhado entre empresas</div>' : ''}
               </div>
               <div style="display:flex; flex-direction:column; gap:4px;">
                 <button class="copiar-lic-btn" data-chave="${chave}" style="background:transparent; border:1px solid var(--line); color:var(--paper); border-radius:5px; padding:4px 8px; font-size:10px; cursor:pointer; font-family:inherit;">📋 Copiar</button>
@@ -2034,6 +2220,101 @@ function restaurarBackup(file){
   reader.readAsText(file);
 }
 
+// Detecta endereços que se repetem com frequência ao longo dos dias (não é IA de verdade —
+// é contagem de frequência mesmo, guardada no seu próprio navegador) e sugere adicionar de novo.
+function getEnderecosFrequentes(){
+  try{ return JSON.parse(localStorage.getItem(chaveComLicenca('roteirizador_enderecosFrequentes')) || '{}'); }catch(e){ return {}; }
+}
+function registrarEnderecosDoDia(enderecos){
+  const chaveAtual = getChaveEmpresaAtual();
+  if(!chaveAtual) return;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dados = getEnderecosFrequentes();
+  enderecos.forEach(end => {
+    const chave = (end || '').trim().toLowerCase();
+    if(!chave) return;
+    if(!dados[chave]) dados[chave] = { original: end.trim(), datas: [] };
+    if(!dados[chave].datas.includes(hoje)) dados[chave].datas.push(hoje);
+    dados[chave].original = end.trim(); // mantém sempre a grafia mais recente digitada
+  });
+  // Limpa datas com mais de 60 dias, pra não crescer pra sempre
+  const limite60 = new Date(); limite60.setDate(limite60.getDate() - 60);
+  const limite60Str = limite60.toISOString().slice(0, 10);
+  Object.keys(dados).forEach(chave => {
+    dados[chave].datas = dados[chave].datas.filter(d => d >= limite60Str);
+    if(!dados[chave].datas.length) delete dados[chave];
+  });
+  try{ localStorage.setItem(chaveComLicenca('roteirizador_enderecosFrequentes'), JSON.stringify(dados)); }catch(e){}
+}
+function calcularSugestoesFrequentes(){
+  const dados = getEnderecosFrequentes();
+  const limite21 = new Date(); limite21.setDate(limite21.getDate() - 21);
+  const limite21Str = limite21.toISOString().slice(0, 10);
+  const listaAtual = addrsEl.value.split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+  const sugestoes = [];
+  Object.keys(dados).forEach(chave => {
+    const item = dados[chave];
+    const datasRecentes = item.datas.filter(d => d >= limite21Str);
+    if(datasRecentes.length >= 3){
+      const jaEsta = listaAtual.some(linha => linha.includes(chave) || chave.includes(linha));
+      if(!jaEsta) sugestoes.push({ endereco: item.original, vezes: datasRecentes.length });
+    }
+  });
+  sugestoes.sort((a, b) => b.vezes - a.vezes);
+  return sugestoes;
+}
+function atualizarBadgeSugestoes(){
+  const badge = document.getElementById('sugestoesBadge');
+  if(!badge) return;
+  const n = calcularSugestoesFrequentes().length;
+  if(n > 0){ badge.textContent = n; badge.style.display = 'flex'; }
+  else{ badge.style.display = 'none'; }
+}
+
+function showSugestoesView(){
+  const sugestoes = calcularSugestoesFrequentes();
+  const existing = document.getElementById('sugestoesOverlay');
+  if(existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="sugestoesOverlay" style="position:fixed; inset:0; z-index:4000; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px;">
+      <div style="background:var(--navy-2); border:1px solid var(--line); border-radius:14px; padding:24px; width:440px; max-width:100%; max-height:88vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.4);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+          <h2 style="margin:0; font-size:17px;">💡 Sugestões de hoje</h2>
+          <button id="closeSugestoesBtn" style="background:var(--ink); border:1px solid var(--line); color:var(--paper); width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:14px;">✕</button>
+        </div>
+        <div class="hint" style="margin-bottom:14px;">Esses endereços apareceram bastante nas suas rotas recentes (últimas 3 semanas), mas ainda não estão na lista de hoje. Vai entregar aí também?</div>
+        <div id="listaSugestoes">
+          ${sugestoes.length ? sugestoes.map((s, i) => `
+            <label style="display:flex; align-items:flex-start; gap:10px; background:var(--ink); border-radius:8px; padding:11px; margin-bottom:8px; cursor:pointer;">
+              <input type="checkbox" class="sugestao-check" data-idx="${i}" checked style="margin-top:3px;">
+              <div style="flex:1;">
+                <div style="font-size:13px;">${s.endereco}</div>
+                <div style="font-size:11px; color:var(--amber); margin-top:2px;">apareceu ${s.vezes}x nas últimas 3 semanas</div>
+              </div>
+            </label>
+          `).join('') : '<div class="hint">Nenhuma sugestão por enquanto — vai aparecendo conforme você for gerando rotas ao longo dos dias.</div>'}
+        </div>
+        ${sugestoes.length ? '<button id="addSugestoesBtn" class="primary" style="margin-top:10px;">+ Adicionar selecionados na lista de hoje</button>' : ''}
+      </div>
+    </div>
+  `);
+  document.getElementById('closeSugestoesBtn').addEventListener('click', () => document.getElementById('sugestoesOverlay').remove());
+  const addBtn = document.getElementById('addSugestoesBtn');
+  if(addBtn){
+    addBtn.addEventListener('click', () => {
+      const selecionados = [...document.querySelectorAll('.sugestao-check:checked')].map(chk => sugestoes[parseInt(chk.dataset.idx)].endereco);
+      if(!selecionados.length){ alert('Marque pelo menos um endereço.'); return; }
+      const atuais = addrsEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+      addrsEl.value = [...atuais, ...selecionados].join('\n');
+      saveFormState();
+      document.getElementById('sugestoesOverlay').remove();
+      atualizarBadgeSugestoes();
+      setStatus(`${selecionados.length} endereço(s) sugerido(s) adicionados.`, 'ok');
+    });
+  }
+}
+
 async function showFuncionariosView(){
   const chave = getChaveEmpresaAtual();
   if(!chave){ alert('Não consegui identificar sua empresa agora.'); return; }
@@ -2398,8 +2679,14 @@ function renderVehicleSelectors(){
       pausaDuracaoInput.value = prev.pausaDuracao || '';
       custoKmInput.value = prevCustoKm[i] || '';
     }else{
-      select.value = 5; // Fiat Ducato Cargo como padrão
-      applyModel(5);
+      if(savedDrivers[i] && savedDrivers[i].modelIdx !== undefined && savedDrivers[i].modelIdx !== ''){
+        select.value = savedDrivers[i].modelIdx;
+        kgInput.value = savedDrivers[i].kg || '';
+        m3Input.value = savedDrivers[i].m3 || '';
+      }else{
+        select.value = 5; // Fiat Ducato Cargo como padrão (nenhum veículo salvo ainda)
+        applyModel(5);
+      }
       if(savedDrivers[i]){
         nameInput.value = savedDrivers[i].name || '';
         phoneInput.value = savedDrivers[i].phone || '';
@@ -2415,6 +2702,9 @@ function renderVehicleSelectors(){
       const rows = [...container.querySelectorAll('.vehicle-row')];
       const custoInputs = [...custoKmContainer.querySelectorAll('.driver-custo-km')];
       const info = rows.map((r, idx) => ({
+        modelIdx: r.querySelector('.vehicle-model').value,
+        kg: r.querySelector('.vehicle-kg').value,
+        m3: r.querySelector('.vehicle-m3').value,
         name: r.querySelector('.driver-name').value,
         phone: r.querySelector('.driver-phone').value,
         depotIdx: r.querySelector('.driver-depot').value,
@@ -2425,6 +2715,9 @@ function renderVehicleSelectors(){
       }));
       try{ localStorage.setItem(chaveComLicenca('roteirizador_driversInfo'), JSON.stringify(info)); }catch(e){}
     };
+    select.addEventListener('change', saveDriversInfo);
+    kgInput.addEventListener('change', saveDriversInfo);
+    m3Input.addEventListener('change', saveDriversInfo);
     nameInput.addEventListener('change', saveDriversInfo);
     phoneInput.addEventListener('change', saveDriversInfo);
     pausaInicioInput.addEventListener('change', saveDriversInfo);
@@ -3866,6 +4159,7 @@ async function iniciarApp(){
     document.getElementById('loginGate').style.display = 'none';
   }else{
     await checkLoginGate();
+    atualizarBadgeSugestoes();
   }
 
   tryRenderRatingView(avaliarOverride);
@@ -4323,6 +4617,8 @@ genBtn.addEventListener('click', async () => {
   const sessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   lastResult = { depot: primaryDepot, drivers, totalKm, totalCusto, totalKmNaive, sessionId };
   logDriverHistory(drivers);
+  registrarEnderecosDoDia(stops.map(s => s.label));
+  atualizarBadgeSugestoes();
   renderTabs(numDrivers);
   renderView('all');
 
@@ -4340,19 +4636,32 @@ genBtn.addEventListener('click', async () => {
       if(!pedagios.length) return;
       const el = document.getElementById(`driverPedagio-${dIdx}`);
       if(el){
-        // Junta pedágios muito próximos uns dos outros (mesma praça, marcados 2x no mapa) num só
+        // Junta pedágios próximos uns dos outros (mesma praça, várias cabines/faixas mapeadas separadamente no OSM)
         const unicos = [];
         pedagios.forEach(p => {
-          const jaTem = unicos.some(u => haversine(u, p) < 0.1);
+          const jaTem = unicos.some(u => haversine(u, p) < 1); // 1km — cobre praças grandes com várias faixas
           if(!jaTem) unicos.push(p);
         });
+
+        // Ordena pela posição real ao longo do trajeto (não pela ordem que o banco de dados devolveu, que é aleatória)
+        const comIndice = unicos.map(p => {
+          let menorDist = Infinity, indiceMaisPerto = 0;
+          drv.geometry.forEach(([lng, lat], i) => {
+            const d = haversine({ lat, lng }, p);
+            if(d < menorDist){ menorDist = d; indiceMaisPerto = i; }
+          });
+          return { ...p, indiceNaRota: indiceMaisPerto };
+        });
+        comIndice.sort((a, b) => a.indiceNaRota - b.indiceNaRota);
+
         const nomeMotorista = drv.driverInfo && drv.driverInfo.name ? ' de ' + drv.driverInfo.name : '';
-        const linksPedagios = unicos.map((p, i) => {
+        const plural = comIndice.length > 1;
+        const linksPedagios = comIndice.map((p, i) => {
           const rotulo = (p.nome && p.nome !== 'Pedágio') ? p.nome : `Pedágio ${i + 1}`;
           const linkMaps = `https://www.google.com/maps?q=${p.lat},${p.lng}`;
-          return `<a href="${linkMaps}" target="_blank" style="color:#5B9BD5; text-decoration:underline;">${rotulo} (ver no mapa)</a>`;
-        }).join(' · ');
-        el.innerHTML = `🛣️ Pedágio conhecido na rota${nomeMotorista}: ${linksPedagios}`;
+          return `<a href="${linkMaps}" target="_blank" style="color:#5B9BD5; text-decoration:underline;">${rotulo}</a>`;
+        }).join(' → ');
+        el.innerHTML = `🛣️ ${comIndice.length} pedágio${plural ? 's' : ''} conhecido${plural ? 's' : ''} na rota${nomeMotorista}, na ordem do trajeto: ${linksPedagios}`;
         el.style.display = 'block';
       }
     }).catch(() => {});
