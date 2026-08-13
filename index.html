@@ -2287,12 +2287,42 @@ function limparLinhaWhatsapp(linha){
     .replace(/^\d{1,2}[:.]\d{2}\s*-\s*[^:]{1,40}:\s*/, '')
     .trim();
 }
+// Quando o endereço vem dentro de uma frase corrida (tipo "manda pra rua tal, 123, depois me avisa"),
+// isola só o trecho que parece endereço, cortando o "papo" antes e depois.
+const PALAVRAS_ENDERECO = ['rua', 'av', 'avenida', 'travessa', 'trav', 'alameda', 'rodovia', 'estrada', 'rod', 'km',
+  'praça', 'praca', 'quadra', 'lote', 'bairro', 'vila', 'jardim', 'condominio', 'condomínio', 'residencial', 'setor'];
+
+function extrairTrechoEndereco(linha){
+  const regexInicio = new RegExp('\\b(' + PALAVRAS_ENDERECO.join('|') + ')\\b', 'i');
+  const match = regexInicio.exec(linha);
+  if(!match) return linha; // não achou palavra-chave de logradouro, devolve como veio
+
+  let trecho = linha.slice(match.index);
+
+  // Corta fora despedidas/pedidos comuns que grudam depois do endereço, na mesma frase
+  const fechamentos = [
+    /\bme\s+fala\b.*/i, /\bme\s+avisa\b.*/i, /\bme\s+confirma\b.*/i, /\bconfirma\b.*/i,
+    /\bqualquer\s+coisa\b.*/i, /\bobrigad[oa]\b.*/i, /\bvaleu\b.*/i, /\bpor\s+favor\b.*/i,
+    /\bse\s+deu\s+\w*\b.*/i, /\bpode\s+ser\b.*/i, /\bmuito\s+obrigad[oa]\b.*/i
+  ];
+  fechamentos.forEach(re => { trecho = trecho.replace(re, ''); });
+
+  // Depois de cortar, ainda pode sobrar uma palavra solta de conversa no final (ex: "...monte belo ai depois")
+  let mudou = true;
+  while(mudou){
+    const antes = trecho;
+    trecho = trecho.replace(/\s+(ai|aí|dai|daí|depois|então|entao|e|ta|tá)\s*$/i, '');
+    mudou = trecho !== antes;
+  }
+
+  trecho = trecho.trim();
+  return trecho.length >= 6 ? trecho : linha; // se cortou demais e sobrou muito pouco, melhor devolver a linha inteira
+}
+
 function extrairEnderecosProvaveis(textoBruto){
   const ruido = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'tudo bem', 'tudo bom', 'obrigado', 'obrigada',
     'valeu', 'blz', 'beleza', 'ok', 'okay', 'certo', 'tá bom', 'ta bom', 'flw', 'até mais', 'até', 'sim', 'não', 'nao',
     'por favor', 'pfv', 'favor confirmar', 'confirma', 'segue', 'segue abaixo', 'pode ser', 'de nada', 'show', 'fechado'];
-  const palavrasEndereco = ['rua', 'av', 'avenida', 'travessa', 'trav', 'alameda', 'rodovia', 'estrada', 'rod', 'km',
-    'praça', 'praca', 'quadra', 'lote', 'bairro', 'vila', 'jardim', 'condominio', 'condomínio', 'residencial', 'setor'];
 
   const linhas = textoBruto.split('\n').map(l => limparLinhaWhatsapp(l.trim())).filter(Boolean);
   const candidatos = linhas.filter(linha => {
@@ -2301,10 +2331,10 @@ function extrairEnderecosProvaveis(textoBruto){
     if(ruido.includes(linhaLower)) return false;
     if(/^\[?\d{1,2}[:.]\d{2}/.test(linha)) return false; // sobrou timestamp de export do WhatsApp
     const temNumero = /\d/.test(linha);
-    const temPalavraEndereco = palavrasEndereco.some(p => linhaLower.includes(p));
+    const temPalavraEndereco = PALAVRAS_ENDERECO.some(p => linhaLower.includes(p));
     return temNumero || temPalavraEndereco;
   });
-  return [...new Set(candidatos)];
+  return [...new Set(candidatos.map(extrairTrechoEndereco))];
 }
 
 function mostrarRevisaoEnderecos(candidatos, titulo){
