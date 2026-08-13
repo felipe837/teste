@@ -217,6 +217,7 @@
       <div id="adminControls">
       <label for="depotAddr">📍 Depósito principal</label>
       <input type="text" id="depotAddr" placeholder="Empresa Distribuidora, Monte Belo, MG" style="width:100%; border-color:var(--amber);" value="Distribuidora Central, Monte Belo, MG">
+      <button id="selecionarDepotMapaBtn" type="button" style="width:100%; margin-top:6px; background:transparent; color:#5B9BD5; border:1px dashed #5B9BD5; border-radius:8px; padding:7px; font-size:11.5px; cursor:pointer; font-family:inherit;">📌 Selecionar no mapa</button>
 
       <details class="collapsible">
         <summary>⚙️ Outros depósitos e rotas salvas</summary>
@@ -701,6 +702,72 @@ document.getElementById('planilhaInput').addEventListener('change', (e) => {
 });
 
 document.getElementById('sugestoesBtn').addEventListener('click', showSugestoesView);
+
+// Selecionar o depósito principal clicando num pino no mapa, em vez de só digitar o endereço
+document.getElementById('selecionarDepotMapaBtn').addEventListener('click', () => {
+  const existing = document.getElementById('selecionarDepotOverlay');
+  if(existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="selecionarDepotOverlay" style="position:fixed; inset:0; z-index:4500; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; padding:20px;">
+      <div style="background:var(--navy-2); border:1px solid var(--line); border-radius:14px; padding:20px; width:520px; max-width:100%; box-shadow:0 20px 60px rgba(0,0,0,.4);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <h2 style="margin:0; font-size:16px;">📌 Clique no mapa pra marcar o depósito</h2>
+          <button id="closeSelecionarDepotBtn" style="background:var(--ink); border:1px solid var(--line); color:var(--paper); width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:14px;">✕</button>
+        </div>
+        <div id="miniMapaDepot" style="height:340px; border-radius:10px; overflow:hidden; border:1px solid var(--line);"></div>
+        <div id="miniMapaStatus" class="hint" style="margin-top:10px;">Clique em qualquer ponto do mapa pra escolher o local exato.</div>
+        <button id="confirmarDepotMapaBtn" class="primary" style="margin-top:10px; display:none;">✓ Usar esse local</button>
+      </div>
+    </div>
+  `);
+  document.getElementById('closeSelecionarDepotBtn').addEventListener('click', () => document.getElementById('selecionarDepotOverlay').remove());
+
+  // Centraliza no depósito atual, se já tiver sido geocodificado antes; senão usa Monte Belo, MG como ponto de partida
+  const centroInicial = (lastResult && lastResult.depot) ? [lastResult.depot.lat, lastResult.depot.lng] : [-21.29, -45.29];
+  const miniMapa = L.map('miniMapaDepot').setView(centroInicial, 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(miniMapa);
+
+  let marcadorEscolhido = null;
+  let coordenadaEscolhida = null;
+
+  miniMapa.on('click', async (e) => {
+    coordenadaEscolhida = e.latlng;
+    if(marcadorEscolhido) miniMapa.removeLayer(marcadorEscolhido);
+    marcadorEscolhido = L.marker(e.latlng).addTo(miniMapa);
+
+    const statusEl = document.getElementById('miniMapaStatus');
+    statusEl.textContent = 'Buscando o endereço desse ponto…';
+    document.getElementById('confirmarDepotMapaBtn').style.display = 'none';
+
+    try{
+      const res = await fetch(`https://photon.komoot.io/reverse?lat=${e.latlng.lat}&lon=${e.latlng.lng}&lang=pt`);
+      const data = await res.json();
+      let enderecoTexto = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; // fallback: só a coordenada
+      if(data.features && data.features[0]){
+        const p = data.features[0].properties;
+        enderecoTexto = [p.name, p.street, p.housenumber, p.city, p.state].filter(Boolean).join(', ');
+      }
+      statusEl.innerHTML = `📍 <b>${enderecoTexto}</b>`;
+      document.getElementById('confirmarDepotMapaBtn').dataset.endereco = enderecoTexto;
+      document.getElementById('confirmarDepotMapaBtn').style.display = 'block';
+    }catch(err){
+      statusEl.textContent = 'Não consegui identificar o endereço desse ponto, mas ainda dá pra usar a coordenada.';
+      document.getElementById('confirmarDepotMapaBtn').dataset.endereco = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+      document.getElementById('confirmarDepotMapaBtn').style.display = 'block';
+    }
+  });
+
+  document.getElementById('confirmarDepotMapaBtn').addEventListener('click', () => {
+    const endereco = document.getElementById('confirmarDepotMapaBtn').dataset.endereco;
+    document.getElementById('depotAddr').value = endereco;
+    saveFormState();
+    document.getElementById('selecionarDepotOverlay').remove();
+    setStatus('Depósito atualizado pelo mapa.', 'ok');
+  });
+
+  // O mapa dentro do modal precisa recalcular o tamanho depois de aparecer na tela
+  setTimeout(() => miniMapa.invalidateSize(), 100);
+});
 
 document.getElementById('exportarBackupBtn').addEventListener('click', exportarBackup);
 document.getElementById('restaurarBackupBtn').addEventListener('click', () => {
