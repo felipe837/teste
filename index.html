@@ -2291,11 +2291,23 @@ function limparLinhaWhatsapp(linha){
 // isola só o trecho que parece endereço, cortando o "papo" antes e depois.
 const PALAVRAS_ENDERECO = ['rua', 'av', 'avenida', 'travessa', 'trav', 'alameda', 'rodovia', 'estrada', 'rod', 'km',
   'praça', 'praca', 'quadra', 'lote', 'bairro', 'vila', 'jardim', 'condominio', 'condomínio', 'residencial', 'setor'];
+const SIGLAS_ESTADO = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR',
+  'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+
+// Se detectar a sigla do estado no fim (tipo "...Alfenas MG", sem vírgula), coloca a vírgula sozinho.
+function adicionarVirgulaAntesDoEstado(texto){
+  const regex = new RegExp('\\s+(' + SIGLAS_ESTADO.join('|') + ')\\s*$', 'i');
+  const match = regex.exec(texto);
+  if(!match) return texto;
+  const antes = texto.slice(0, match.index);
+  if(!antes.trim().length || antes.trim().endsWith(',')) return texto; // nada antes, ou já tem vírgula — não mexe
+  return antes + ',' + texto.slice(match.index);
+}
 
 function extrairTrechoEndereco(linha){
   const regexInicio = new RegExp('\\b(' + PALAVRAS_ENDERECO.join('|') + ')\\b', 'i');
   const match = regexInicio.exec(linha);
-  if(!match) return linha; // não achou palavra-chave de logradouro, devolve como veio
+  if(!match) return adicionarVirgulaAntesDoEstado(linha); // não achou palavra-chave de logradouro, devolve como veio (só arrumando a vírgula do estado)
 
   let trecho = linha.slice(match.index);
 
@@ -2316,7 +2328,8 @@ function extrairTrechoEndereco(linha){
   }
 
   trecho = trecho.trim();
-  return trecho.length >= 6 ? trecho : linha; // se cortou demais e sobrou muito pouco, melhor devolver a linha inteira
+  if(trecho.length < 6) trecho = linha; // se cortou demais e sobrou muito pouco, melhor devolver a linha inteira
+  return adicionarVirgulaAntesDoEstado(trecho);
 }
 
 function extrairEnderecosProvaveis(textoBruto){
