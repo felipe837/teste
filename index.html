@@ -729,11 +729,15 @@ document.getElementById('selecionarDepotMapaBtn').addEventListener('click', () =
 
   let marcadorEscolhido = null;
   let coordenadaEscolhida = null;
+  const iconePino = L.divIcon({
+    className: '', html: `<div style="font-size:28px; line-height:1; transform:translateY(-4px);">📍</div>`,
+    iconSize: [28, 28], iconAnchor: [14, 28]
+  });
 
   miniMapa.on('click', async (e) => {
     coordenadaEscolhida = e.latlng;
     if(marcadorEscolhido) miniMapa.removeLayer(marcadorEscolhido);
-    marcadorEscolhido = L.marker(e.latlng).addTo(miniMapa);
+    marcadorEscolhido = L.marker(e.latlng, { icon: iconePino }).addTo(miniMapa);
 
     const statusEl = document.getElementById('miniMapaStatus');
     statusEl.textContent = 'Buscando o endereço desse ponto…';
@@ -741,18 +745,27 @@ document.getElementById('selecionarDepotMapaBtn').addEventListener('click', () =
 
     try{
       const res = await fetch(`https://photon.komoot.io/reverse?lat=${e.latlng.lat}&lon=${e.latlng.lng}&lang=pt`);
+      if(!res.ok) throw new Error('resposta não-ok: ' + res.status);
       const data = await res.json();
-      let enderecoTexto = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; // fallback: só a coordenada
+      const coordTexto = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+
       if(data.features && data.features[0]){
         const p = data.features[0].properties;
-        enderecoTexto = [p.name, p.street, p.housenumber, p.city, p.state].filter(Boolean).join(', ');
+        const enderecoTexto = [p.name, p.street, p.housenumber, p.city, p.state].filter(Boolean).join(', ') || coordTexto;
+        statusEl.innerHTML = `📍 <b>${enderecoTexto}</b>`;
+        document.getElementById('confirmarDepotMapaBtn').dataset.endereco = enderecoTexto;
+      }else{
+        // Achou o serviço, mas não tem nenhum endereço mapeado perto desse ponto específico
+        console.warn('Reverse geocoding sem resultado perto desse ponto:', e.latlng);
+        statusEl.innerHTML = `📍 Não achei um endereço mapeado bem aqui perto — vou usar a coordenada (<b>${coordTexto}</b>). Se quiser, ajuste o texto depois de confirmar.`;
+        document.getElementById('confirmarDepotMapaBtn').dataset.endereco = coordTexto;
       }
-      statusEl.innerHTML = `📍 <b>${enderecoTexto}</b>`;
-      document.getElementById('confirmarDepotMapaBtn').dataset.endereco = enderecoTexto;
       document.getElementById('confirmarDepotMapaBtn').style.display = 'block';
     }catch(err){
-      statusEl.textContent = 'Não consegui identificar o endereço desse ponto, mas ainda dá pra usar a coordenada.';
-      document.getElementById('confirmarDepotMapaBtn').dataset.endereco = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+      console.warn('Falha ao buscar endereço reverso:', err);
+      const coordTexto = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+      statusEl.innerHTML = `⚠️ Não consegui buscar o endereço agora (sem conexão?) — vou usar a coordenada (<b>${coordTexto}</b>).`;
+      document.getElementById('confirmarDepotMapaBtn').dataset.endereco = coordTexto;
       document.getElementById('confirmarDepotMapaBtn').style.display = 'block';
     }
   });
