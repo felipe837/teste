@@ -2294,14 +2294,34 @@ const PALAVRAS_ENDERECO = ['rua', 'av', 'avenida', 'travessa', 'trav', 'alameda'
 const SIGLAS_ESTADO = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR',
   'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
+// Acha a ÚLTIMA sigla de estado (ou CEP) no texto. SE e TO recebem tratamento especial —
+// são sigla de estado, mas também palavras super comuns ("se deu certo", "eu to indo"), então só
+// contam como estado quando vierem em MAIÚSCULA mesmo (mais raro de acontecer por acaso).
+const SIGLAS_ARRISCADAS = ['SE', 'TO'];
+const SIGLAS_SEGURAS = SIGLAS_ESTADO.filter(uf => !SIGLAS_ARRISCADAS.includes(uf));
+function encontrarUltimoEstadoOuCep(texto){
+  const regexSeguras = new RegExp('\\b(' + SIGLAS_SEGURAS.join('|') + ')\\b', 'gi');
+  const regexArriscadas = new RegExp('\\b(' + SIGLAS_ARRISCADAS.join('|') + ')\\b', 'g'); // sem "i" — só maiúscula conta
+  const regexCep = /\d{5}-?\d{3}\b/g;
+  let melhor = null;
+  [regexSeguras, regexArriscadas, regexCep].forEach(regex => {
+    let m;
+    while((m = regex.exec(texto)) !== null){
+      if(!melhor || (m.index + m[0].length) > (melhor.index + melhor[0].length)) melhor = m;
+    }
+  });
+  return melhor;
+}
+
 // Se detectar a sigla do estado no fim (tipo "...Alfenas MG", sem vírgula), coloca a vírgula sozinho.
 function adicionarVirgulaAntesDoEstado(texto){
-  const regex = new RegExp('\\s+(' + SIGLAS_ESTADO.join('|') + ')\\s*$', 'i');
-  const match = regex.exec(texto);
+  const match = encontrarUltimoEstadoOuCep(texto);
   if(!match) return texto;
-  const antes = texto.slice(0, match.index);
-  if(!antes.trim().length || antes.trim().endsWith(',')) return texto; // nada antes, ou já tem vírgula — não mexe
-  return antes + ',' + texto.slice(match.index);
+  const antes = texto.slice(0, match.index).replace(/\s+$/, '');
+  const depois = texto.slice(match.index + match[0].length).trim();
+  if(depois.length) return texto; // ainda sobra coisa depois do estado — não é o fim de verdade, não mexe
+  if(!antes.length || antes.endsWith(',')) return texto; // nada antes, ou já tem vírgula — não mexe
+  return antes + ', ' + texto.slice(match.index);
 }
 
 function extrairTrechoEndereco(linha){
@@ -2311,13 +2331,21 @@ function extrairTrechoEndereco(linha){
 
   let trecho = linha.slice(match.index);
 
-  // Corta fora despedidas/pedidos comuns que grudam depois do endereço, na mesma frase
-  const fechamentos = [
-    /\bme\s+fala\b.*/i, /\bme\s+avisa\b.*/i, /\bme\s+confirma\b.*/i, /\bconfirma\b.*/i,
-    /\bqualquer\s+coisa\b.*/i, /\bobrigad[oa]\b.*/i, /\bvaleu\b.*/i, /\bpor\s+favor\b.*/i,
-    /\bse\s+deu\s+\w*\b.*/i, /\bpode\s+ser\b.*/i, /\bmuito\s+obrigad[oa]\b.*/i
-  ];
-  fechamentos.forEach(re => { trecho = trecho.replace(re, ''); });
+  // Estratégia principal: acha a ÚLTIMA sigla de estado ou CEP no trecho, e corta tudo que vier
+  // depois — dificilmente sobra informação de endereço depois disso, o resto é "papo" grudado.
+  const matchFim = encontrarUltimoEstadoOuCep(trecho);
+
+  if(matchFim){
+    trecho = trecho.slice(0, matchFim.index + matchFim[0].length);
+  }else{
+    // Não achou estado nem CEP — usa a lista de despedidas comuns como plano B
+    const fechamentos = [
+      /\bme\s+fala\b.*/i, /\bme\s+avisa\b.*/i, /\bme\s+confirma\b.*/i, /\bconfirma\b.*/i,
+      /\bqualquer\s+coisa\b.*/i, /\bobrigad[oa]\b.*/i, /\bvaleu\b.*/i, /\bpor\s+favor\b.*/i,
+      /\bse\s+deu\s+\w*\b.*/i, /\bpode\s+ser\b.*/i, /\bmuito\s+obrigad[oa]\b.*/i
+    ];
+    fechamentos.forEach(re => { trecho = trecho.replace(re, ''); });
+  }
 
   // Depois de cortar, ainda pode sobrar uma palavra solta de conversa no final (ex: "...monte belo ai depois")
   let mudou = true;
