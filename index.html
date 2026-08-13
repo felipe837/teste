@@ -278,6 +278,11 @@ Rua Tiradentes, 50, Monte Belo, MG</textarea>
         <input type="time" id="horaSaida" value="08:00" style="width:120px; font-family:'JetBrains Mono', 'Courier New', monospace;">
       </div>
 
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px; font-size:12.5px; font-weight:600;">
+        <input type="checkbox" id="incluirVoltaCheck" style="width:16px; height:16px; cursor:pointer;">
+        🔄 Incluir a volta pro depósito no cálculo (km, tempo e custo)
+      </label>
+
       <div class="row">
         <label for="numDrivers">Nº de motoristas</label>
         <input type="number" id="numDrivers" min="1" max="12" value="2">
@@ -3557,6 +3562,7 @@ function renderView(filter){
       const min = Math.round(durationMin % 60);
       const tempoStr = horas > 0 ? `${horas}h${min.toString().padStart(2,'0')}` : `${min} min`;
       distHtml = `<b style="color:${color};">${distanceKm.toFixed(1)} km</b> · ~${tempoStr} de direção`;
+      if(d.temVolta) distHtml += ` <span style="color:var(--good); font-size:10.5px;">🔄 inclui volta</span>`;
       if(custo > 0){
         distHtml += ` · <b style="color:${color};">R$ ${custo.toFixed(2)}</b> estimado <span style="color:var(--muted); font-size:10px;">(R$ ${(d.custoPorKm || 0).toFixed(2)}/km)</span>`;
       }
@@ -4478,6 +4484,7 @@ function saveFormState(){
     localStorage.setItem(chaveComLicenca('roteirizador_custoKm'), custoKmEl.value);
     localStorage.setItem(chaveComLicenca('roteirizador_numDrivers'), numDriversInput.value);
     localStorage.setItem(chaveComLicenca('roteirizador_depotAddr'), depotAddrEl.value);
+    localStorage.setItem(chaveComLicenca('roteirizador_incluirVolta'), document.getElementById('incluirVoltaCheck').checked ? '1' : '0');
   }catch(e){ /* ignora */ }
 }
 
@@ -4493,6 +4500,8 @@ function loadFormState(){
     if(savedNum) numDriversInput.value = savedNum;
     const savedDepot = localStorage.getItem(chaveComLicenca('roteirizador_depotAddr'));
     if(savedDepot) depotAddrEl.value = savedDepot;
+    const savedVolta = localStorage.getItem(chaveComLicenca('roteirizador_incluirVolta'));
+    if(savedVolta !== null) document.getElementById('incluirVoltaCheck').checked = savedVolta === '1';
   }catch(e){ /* segue com os valores padrão */ }
 }
 
@@ -4500,6 +4509,7 @@ loadFormState();
 renderVehicleSelectors();
 [addrsEl, horaSaidaEl, custoKmEl, depotAddrEl].forEach(el => el.addEventListener('change', saveFormState));
 numDriversInput.addEventListener('change', saveFormState);
+document.getElementById('incluirVoltaCheck').addEventListener('change', saveFormState);
 
 // ===== Rotas salvas (templates reutilizáveis) =====
 const routeTemplateSelect = document.getElementById('routeTemplate');
@@ -4889,9 +4899,32 @@ genBtn.addEventListener('click', async () => {
       // Soma acumulada dos trechos para saber o horário estimado em cada parada, já considerando a pausa (se houver)
       arrivals = calcularChegadas(horaSaidaMin, dist.legs, route, driverPausaInicio[dIdx], driverPausaDuracao[dIdx]);
     }
+
+    // Se marcado, soma o trecho de volta da última parada até o depósito (km, tempo, custo e o desenho no mapa)
+    let geometriaFinal = dist ? dist.geometry : null;
+    let temVolta = false;
+    const incluirVolta = document.getElementById('incluirVoltaCheck').checked;
+    if(incluirVolta && dist && route.length > 1){
+      setStatus(`Calculando volta pro depósito do Motorista ${dIdx+1}…`);
+      const ultimoPonto = route[route.length - 1];
+      const voltaDist = await getRouteDistance([ultimoPonto, route[0]]);
+      if(voltaDist){
+        distanceKm += voltaDist.distanceKm;
+        durationMin += voltaDist.durationMin;
+        totalKm += voltaDist.distanceKm;
+        if(custoPorKmDoMotorista > 0){
+          const custoExtra = voltaDist.distanceKm * custoPorKmDoMotorista;
+          custo += custoExtra;
+          totalCusto += custoExtra;
+        }
+        if(voltaDist.geometry && geometriaFinal) geometriaFinal = [...geometriaFinal, ...voltaDist.geometry];
+        temVolta = true;
+      }
+    }
+
     drivers.push({ route, color, distanceKm, durationMin, custo, arrivals, vehicle: vehicles[dIdx], driverInfo: driversInfo[dIdx],
       pausaInicioMin: driverPausaInicio[dIdx], pausaDuracaoMin: driverPausaDuracao[dIdx], custoPorKm: custoPorKmDoMotorista,
-      geometry: dist ? dist.geometry : null,
+      geometry: geometriaFinal, temVolta,
       totalWeightKg: route.slice(1).reduce((sum, p) => sum + (p.weightKg || 0), 0),
       totalVolumeM3: route.slice(1).reduce((sum, p) => sum + (p.volumeM3 || 0), 0),
       totalCobranca: route.slice(1).reduce((sum, p) => sum + (p.valorCobranca || 0), 0)
