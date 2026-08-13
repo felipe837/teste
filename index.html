@@ -744,19 +744,20 @@ document.getElementById('selecionarDepotMapaBtn').addEventListener('click', () =
     document.getElementById('confirmarDepotMapaBtn').style.display = 'none';
 
     try{
-      const res = await fetch(`https://photon.komoot.io/reverse?lat=${e.latlng.lat}&lon=${e.latlng.lng}&lang=pt`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&accept-language=pt`);
       if(!res.ok) throw new Error('resposta não-ok: ' + res.status);
       const data = await res.json();
       const coordTexto = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
 
-      if(data.features && data.features[0]){
-        const p = data.features[0].properties;
-        const enderecoTexto = [p.name, p.street, p.housenumber, p.city, p.state].filter(Boolean).join(', ') || coordTexto;
+      if(data && data.address && !data.error){
+        const a = data.address;
+        const enderecoTexto = [a.road, a.house_number, a.suburb || a.neighbourhood, a.city || a.town || a.municipality || a.village, a.state]
+          .filter(Boolean).join(', ') || data.display_name || coordTexto;
         statusEl.innerHTML = `📍 <b>${enderecoTexto}</b>`;
         document.getElementById('confirmarDepotMapaBtn').dataset.endereco = enderecoTexto;
       }else{
         // Achou o serviço, mas não tem nenhum endereço mapeado perto desse ponto específico
-        console.warn('Reverse geocoding sem resultado perto desse ponto:', e.latlng);
+        console.warn('Reverse geocoding sem resultado perto desse ponto:', e.latlng, data);
         statusEl.innerHTML = `📍 Não achei um endereço mapeado bem aqui perto — vou usar a coordenada (<b>${coordTexto}</b>). Se quiser, ajuste o texto depois de confirmar.`;
         document.getElementById('confirmarDepotMapaBtn').dataset.endereco = coordTexto;
       }
