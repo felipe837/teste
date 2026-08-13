@@ -3531,6 +3531,7 @@ function renderView(filter){
           if(dist){
             d.distanceKm = dist.distanceKm;
             d.durationMin = dist.durationMin;
+            d.geometry = dist.geometry;
             const horaSaidaMinNow = clockToMinutes(document.getElementById('horaSaida').value || '08:00');
             d.arrivals = calcularChegadas(horaSaidaMinNow, dist.legs, d.route, d.pausaInicioMin, d.pausaDuracaoMin);
             if(d.custoPorKm > 0) d.custo = d.distanceKm * d.custoPorKm;
@@ -3543,7 +3544,11 @@ function renderView(filter){
       }
       allBounds.push([p.lat, p.lng]);
     });
-    const latlngs = route.map(p => [p.lat, p.lng]);
+    // Usa o caminho real da estrada (a mesma geometria calculada pela OSRM) quando disponível,
+    // em vez de simplesmente ligar os pontos das paradas com uma linha reta.
+    const latlngs = (d.geometry && d.geometry.length)
+      ? d.geometry.map(([lng, lat]) => [lat, lng])
+      : route.map(p => [p.lat, p.lng]);
     L.polyline(latlngs, { color, weight: 3, opacity: .85, dashArray: '6,6' }).addTo(lineLayer);
 
     let distHtml = '<span style="color:var(--muted);">distância indisponível no momento</span>';
