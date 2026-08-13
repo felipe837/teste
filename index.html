@@ -3562,7 +3562,9 @@ function renderView(filter){
       const min = Math.round(durationMin % 60);
       const tempoStr = horas > 0 ? `${horas}h${min.toString().padStart(2,'0')}` : `${min} min`;
       distHtml = `<b style="color:${color};">${distanceKm.toFixed(1)} km</b> · ~${tempoStr} de direção`;
-      if(d.temVolta) distHtml += ` <span style="color:var(--good); font-size:10.5px;">🔄 inclui volta</span>`;
+      if(d.temVolta){
+        distHtml = `<b style="color:${color};">${d.distanciaSemVolta.toFixed(1)} km</b> entrega + <b style="color:var(--good);">${d.voltaKm.toFixed(1)} km</b> volta = <b style="color:${color};">${distanceKm.toFixed(1)} km</b> total · ~${tempoStr} de direção`;
+      }
       if(custo > 0){
         distHtml += ` · <b style="color:${color};">R$ ${custo.toFixed(2)}</b> estimado <span style="color:var(--muted); font-size:10px;">(R$ ${(d.custoPorKm || 0).toFixed(2)}/km)</span>`;
       }
@@ -4903,19 +4905,23 @@ genBtn.addEventListener('click', async () => {
     // Se marcado, soma o trecho de volta da última parada até o depósito (km, tempo, custo e o desenho no mapa)
     let geometriaFinal = dist ? dist.geometry : null;
     let temVolta = false;
+    let voltaKm = 0, voltaMin = 0, voltaCusto = 0;
+    const distanciaSemVolta = distanceKm, duracaoSemVolta = durationMin, custoSemVolta = custo;
     const incluirVolta = document.getElementById('incluirVoltaCheck').checked;
     if(incluirVolta && dist && route.length > 1){
       setStatus(`Calculando volta pro depósito do Motorista ${dIdx+1}…`);
       const ultimoPonto = route[route.length - 1];
       const voltaDist = await getRouteDistance([ultimoPonto, route[0]]);
       if(voltaDist){
-        distanceKm += voltaDist.distanceKm;
-        durationMin += voltaDist.durationMin;
-        totalKm += voltaDist.distanceKm;
+        voltaKm = voltaDist.distanceKm;
+        voltaMin = voltaDist.durationMin;
+        distanceKm += voltaKm;
+        durationMin += voltaMin;
+        totalKm += voltaKm;
         if(custoPorKmDoMotorista > 0){
-          const custoExtra = voltaDist.distanceKm * custoPorKmDoMotorista;
-          custo += custoExtra;
-          totalCusto += custoExtra;
+          voltaCusto = voltaKm * custoPorKmDoMotorista;
+          custo += voltaCusto;
+          totalCusto += voltaCusto;
         }
         if(voltaDist.geometry && geometriaFinal) geometriaFinal = [...geometriaFinal, ...voltaDist.geometry];
         temVolta = true;
@@ -4925,6 +4931,7 @@ genBtn.addEventListener('click', async () => {
     drivers.push({ route, color, distanceKm, durationMin, custo, arrivals, vehicle: vehicles[dIdx], driverInfo: driversInfo[dIdx],
       pausaInicioMin: driverPausaInicio[dIdx], pausaDuracaoMin: driverPausaDuracao[dIdx], custoPorKm: custoPorKmDoMotorista,
       geometry: geometriaFinal, temVolta,
+      distanciaSemVolta, duracaoSemVolta, custoSemVolta, voltaKm, voltaMin, voltaCusto,
       totalWeightKg: route.slice(1).reduce((sum, p) => sum + (p.weightKg || 0), 0),
       totalVolumeM3: route.slice(1).reduce((sum, p) => sum + (p.volumeM3 || 0), 0),
       totalCobranca: route.slice(1).reduce((sum, p) => sum + (p.valorCobranca || 0), 0)
